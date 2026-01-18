@@ -250,13 +250,221 @@ phases:
 
 ---
 
-## 3. Summary: Context-Dependent Learning
+## 3. Mechanism 3: Scarce Clarification Queries Under Uncertainty
 
-These two mechanisms together ensure that:
+### Motivation (Real-World Analogy)
 
-1. **Correct behavior depends on remembered explanations**
-2. **Progress depends on preserving accumulated constraints**
-3. **Restarting reasoning at each phase is penalized**
-4. **Long-term context becomes a first-class requirement**
+In real software development, especially on large, long-running projects:
+
+- Developers cannot ask questions constantly
+- Clarifications from architects, stakeholders, or domain experts are scarce and expensive
+
+Experienced developers:
+
+- tolerate ambiguity for long periods
+- build internal hypotheses
+- ask one well-timed, high-value question when uncertainty becomes critical
+
+Inexperienced developers:
+
+- ask too early (before understanding the system)
+- ask too late (after making incorrect assumptions)
+- ask the wrong question
+
+**This mechanism models strategic information gathering, not passive instruction following.**
+
+### Core Idea
+
+The agent is allowed to ask a **very limited number of clarification questions**, and must decide **when** and **what** to ask.
+
+Questions are:
+
+- optional
+- scarce
+- irreversible once used
+
+Correct use requires:
+
+- accumulated context
+- awareness of uncertainty
+- long-horizon planning
+
+### Formal Definition
+
+For tasks exceeding a configurable phase threshold (e.g., 20 phases):
+
+- the agent is granted a fixed **clarification budget**
+
+Constraint:
+
+- at most **1 question per 15 phases**
+- questions may be asked at any phase
+- unused questions are lost when the task ends
+
+The agent is **not required** to ask questions.
+
+The benchmark **does not prompt** the agent to ask.
+
+The agent must decide:
+
+- whether a question is necessary
+- when the expected information gain justifies spending the budget
+
+### Question Interface
+
+At any attempt, instead of submitting code, the agent may submit:
+
+```json
+{
+  "question": "Clarification request in natural language"
+}
+```
+
+Rules:
+
+- A question consumes one question slot
+- The current phase does not advance
+- The evaluator responds with a bounded clarification
+
+### Clarification Response Rules
+
+Clarification responses must:
+
+- Answer only what was asked
+- Avoid revealing test cases or exact rules
+- Be phrased at the conceptual / semantic level
+- Be consistent with previously revealed information
+
+Example response format:
+
+```json
+{
+  "answer": "The rule applies only when multiple valid outputs are possible. It does not require global ordering."
+}
+```
+
+### Required Agent Capability
+
+The agent must demonstrate:
+
+- **uncertainty awareness** ("I cannot disambiguate this from feedback alone")
+- **hypothesis evaluation** ("multiple interpretations are consistent so far")
+- **timing judgment** (ask now vs wait)
+- **precise question formulation**
+
+### Benchmark-Level Guarantees
+
+This mechanism ensures that:
+
+- brute-force trial-and-error is suboptimal
+- agents that rely only on feedback loops plateau
+- strategic reasoning outperforms reactive fixing
+- long-term planning is rewarded
+
+### Example (Long Dependency Sorting Task, 30 Phases)
+
+#### Situation
+
+By Phase 18, the agent observes:
+
+- intermittent failures of `deterministic`
+- no regressions in correctness
+- conflicting signals across scopes
+
+Two plausible interpretations exist:
+
+1. Determinism is required only in tie situations
+2. Determinism is required globally, but conflicts with performance
+
+Feedback alone does not disambiguate.
+
+#### Agent Decision
+
+The agent chooses to ask a question:
+
+```json
+{
+  "question": "Is determinism required globally, or only when multiple candidates have equal priority?"
+}
+```
+
+#### Clarification Response
+
+```json
+{
+  "answer": "Determinism is required only when multiple candidates have equal priority. Global ordering is not expected."
+}
+```
+
+#### Outcome
+
+- The agent refines its internal model
+- Avoids unnecessary refactors
+- Preserves earlier constraints
+- Progresses through later phases efficiently
+
+An agent that:
+
+- asked too early → wasted question
+- never asked → continued ambiguity and regressions
+- asked too late → already exhausted attempts
+
+### Why Code Alone Is Insufficient
+
+The ambiguity prompting the question arises from:
+
+- interaction of multiple constraints
+- partial feedback across many phases
+- absence of explicit restatement
+
+The code does not encode:
+
+- which interpretation the benchmark expects
+- which uncertainty is fundamental vs incidental
+
+Only strategic clarification resolves this.
+
+### Implementation Notes (Automatic Generation)
+
+This mechanism is fully automatable.
+
+Example configuration:
+
+```yaml
+clarification_policy:
+  enabled: true
+  min_phases: 20
+  max_questions: floor(total_phases / 15)
+```
+
+The runner enforces:
+
+- question count
+- phase eligibility
+- response constraints
+
+No manual task authoring is required.
+
+### Failure Modes (Intentionally Tested)
+
+This mechanism differentiates agents by:
+
+- asking no questions and failing late
+- asking low-value questions
+- asking prematurely
+- asking vague or overly broad questions
+- asking precise, high-impact questions at the right time
+
+---
+
+## 4. Summary: Context-Dependent Learning
+
+These three mechanisms together ensure that:
+
+1. **Correct behavior depends on remembered explanations** (Mechanism 1)
+2. **Progress depends on preserving accumulated constraints** (Mechanism 2)
+3. **Strategic information gathering outperforms reactive fixing** (Mechanism 3)
+4. **Restarting reasoning at each phase is penalized**
+5. **Long-term context becomes a first-class requirement**
 
 They form the foundation upon which more advanced context mechanisms can be layered.
