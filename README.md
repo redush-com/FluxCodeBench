@@ -1,10 +1,14 @@
 # FluxCodeBench
 
-A benchmark for evaluating how efficiently LLMs and agent systems can **discover hidden requirements** through iterative feedback.
+A coding benchmark for evaluating LLM agents on multi-phase programming tasks. Tests three critical capabilities:
+
+- **Hidden requirement discovery** — inferring undisclosed constraints from structured feedback
+- **Long-context retention** — maintaining state and hypotheses across many iterations  
+- **Iterative refinement** — systematically improving solutions based on violation signals
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                         FluxCodeBench Flow                                  │
+│                        FluxCodeBench Flow                                   │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
 │   ┌─────────┐      ┌─────────────┐      ┌───────────┐      ┌─────────────┐ │

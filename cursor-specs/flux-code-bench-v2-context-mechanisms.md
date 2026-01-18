@@ -1,4 +1,4 @@
-# DCP-Bench v2: Context-Dependent Learning Mechanisms
+# FluxCodeBench v2: Context-Dependent Learning Mechanisms
 
 ## Overview
 
@@ -6,7 +6,7 @@ This document defines foundational context mechanisms that ensure tasks cannot b
 
 These mechanisms model real-world software development, where correctness depends not only on code, but on remembered constraints, prior explanations, and historical decisions.
 
-**The following mechanisms are mandatory primitives for DCP-Bench v2.**
+**The following mechanisms are mandatory primitives for FluxCodeBench v2.**
 
 ---
 
