@@ -371,6 +371,31 @@ The agent immediately sees how their previous solution performs against new rule
 
 ### 6.3 Agent Interface
 
+#### Initial Task Message (sent once at task start)
+
+Agent receives task context at the beginning:
+
+```json
+{
+  "task_id": "task_01_normalize_dict",
+  "problem": "... contents of problem.md ...",
+  "interface": {
+    "function_name": "normalize",
+    "signature": "def normalize(data: dict) -> dict",
+    "allowed_imports": ["copy", "collections"]
+  },
+  "limits": {
+    "total_phases": 5,
+    "max_attempts_per_phase": 10,
+    "max_total_attempts": 50
+  }
+}
+```
+
+**Note:** The agent must remember these limits throughout the task. This tests the agent's ability to maintain context across multiple attempts.
+
+#### Per-Attempt Message
+
 Agent receives per attempt:
 
 ```json
@@ -378,12 +403,6 @@ Agent receives per attempt:
   "task_id": "task_01_normalize_dict",
   "phase_id": 1,
   "phase_transition": false,
-  "problem": "... contents of problem.md ...",
-  "interface": {
-    "function_name": "normalize",
-    "signature": "def normalize(data: dict) -> dict",
-    "allowed_imports": ["copy", "collections"]
-  },
   "rules": [
     {"id": "correct_output", "description": "Output matches expected structure"},
     {"id": "no_mutation", "description": "Input dict must not be modified"},
