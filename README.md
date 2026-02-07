@@ -50,7 +50,7 @@ The agent receives only minimal initial information (input/output types, basic p
 Key properties:
 - Agent starts with incomplete specification
 - Hidden constraints are revealed indirectly through violation feedback
-- Each phase introduces new undisclosed requirements
+- Each phase introduces new undisclosed requirements that **break the previous solution**
 - Success requires systematic exploration, not just code generation
 
 ## Installation
@@ -59,7 +59,26 @@ Key properties:
 pip install -e .
 ```
 
+After installation, the `saotri-bench` command becomes available. Alternatively, you can run without installing:
+
+```bash
+python -m saotri_bench.cli <command>
+```
+
+## Available Tasks
+
+| Task | Difficulty | Phases | Description |
+|------|-----------|--------|-------------|
+| `task_00_fizzbuzz` | Easy | 3 | FizzBuzz with hidden divisor rules (`%7`, combinations) |
+| `task_01_transform_list` | Easy | 3 | List transformation with evolving number handling |
+| `task_02_merge_dicts` | Easy | 4 | Dict merge with type-aware conflict resolution |
+| `task_03_validate_brackets` | Medium | 5 | Bracket validation with changing contract (bool → exception) |
+| `task_04_sort_objects` | Medium | 6 | Object sorting with evolving key format and edge cases |
+
 ## Quick Start
+
+> All examples below use `saotri-bench` (requires `pip install -e .`).  
+> Without installing, replace `saotri-bench` with `python -m saotri_bench.cli`.
 
 ### List available tasks
 
@@ -70,22 +89,81 @@ saotri-bench list --tasks-dir tasks
 ### Validate a task
 
 ```bash
-saotri-bench validate --task tasks/task_00_filter_numbers
+saotri-bench validate --task tasks/task_00_fizzbuzz
+```
+
+### Run a task (interactive mode — for agents)
+
+```bash
+saotri-bench run --task tasks/task_00_fizzbuzz --workspace ./workspace --poll-interval 2
 ```
 
 ### Run a task (single evaluation)
 
 ```bash
-saotri-bench run --task tasks/task_00_filter_numbers --workspace ./workspace --single
+saotri-bench run --task tasks/task_00_fizzbuzz --workspace ./workspace --single
 ```
 
-### Run a task (interactive mode)
+## How It Works
+
+### For agents (automated)
+
+1. The runner starts and creates the workspace with `problem.md`, `task.json`, `phase.json`, and an empty `solution.py`
+2. The agent reads `problem.md` to understand the task and `phase.json` to see current rules
+3. The agent writes its solution to `workspace/solution.py`
+4. The runner detects the file change and evaluates the solution
+5. The runner writes structured feedback to `workspace/feedback.json`
+6. The agent reads feedback, identifies violations, and refines its solution
+7. Steps 3–6 repeat until all phases pass or attempt limits are reached
+
+### For manual testing
+
+You can simulate an agent by manually editing `workspace/solution.py` while the runner is active:
 
 ```bash
-saotri-bench run --task tasks/task_00_filter_numbers --workspace ./workspace
+# Terminal 1: Start the runner
+saotri-bench run --task tasks/task_00_fizzbuzz --workspace ./workspace --poll-interval 2
+
+# Terminal 2: Write your solution
+# Edit workspace/solution.py with your code
+# The runner will auto-detect changes and evaluate
 ```
 
-In interactive mode, the runner watches for changes to `workspace/solution.py` and evaluates each update.
+**Stopping the runner:**
+- Type `q` + Enter in the runner terminal
+- Or press `Ctrl+C`
+
+### Example walkthrough (task_00_fizzbuzz)
+
+**Phase 0** — You read `problem.md` and write classic FizzBuzz:
+
+```python
+def fizzbuzz(n):
+    if n % 15 == 0: return "FizzBuzz"
+    if n % 3 == 0: return "Fizz"
+    if n % 5 == 0: return "Buzz"
+    return str(n)
+```
+
+Feedback: `status: "valid"` — Phase 0 passes, runner advances to Phase 1.
+
+**Phase 1** — Implicit evaluation runs. Feedback shows violations:
+```json
+{"rule_id": "correct_output", "scope": "divisible_by_7", "count": 3}
+```
+
+You infer: there's a hidden rule for multiples of 7. You add `"Bazz"` handling:
+
+```python
+def fizzbuzz(n):
+    result = ""
+    if n % 3 == 0: result += "Fizz"
+    if n % 5 == 0: result += "Buzz"
+    if n % 7 == 0: result += "Bazz"
+    return result if result else str(n)
+```
+
+Phase 1 passes. Phase 2 reveals combination violations (`divisible_by_21`, `divisible_by_35`, `divisible_by_105`). Your Phase 1 solution already handles these — Phase 2 passes too. Task complete!
 
 ## Workspace Protocol
 
@@ -94,11 +172,13 @@ When running a task, the runner creates a workspace directory with:
 | File | Description |
 |------|-------------|
 | `problem.md` | Problem description (agent-visible) |
-| `task.json` | Task metadata and limits |
-| `phase.json` | Current phase info and rules |
-| `solution.py` | Agent writes solution here |
+| `task.json` | Task metadata, interface, and limits |
+| `phase.json` | Current phase info, rules, and previous feedback |
+| `solution.py` | Agent writes solution here (runner watches for changes) |
 | `feedback.json` | Evaluation feedback after each attempt |
-| `report.json` | Final metrics report |
+| `report.json` | Final metrics report (written on session end) |
+
+> **Note:** The `workspace/` directory is gitignored. Each run starts fresh — delete old workspace files before starting a new session if needed.
 
 ## Feedback Format
 
@@ -127,37 +207,53 @@ Each evaluation returns structured JSON feedback:
 }
 ```
 
+**Status values:**
+- `valid` — all rules pass, phase advances
+- `partially_valid` — some rules pass, some fail
+- `invalid` — no rules pass
+- `error` — code failed to execute (syntax error, timeout, import violation)
+
+**Violation scopes** hint at what went wrong without revealing test cases. For example, `"scope": "divisible_by_7"` tells the agent that something related to sevens is failing.
+
 ## Task Structure
 
-Each task is a directory with:
+Each task is a directory with 4 files:
 
 ```
-tasks/task_00_filter_numbers/
-├── task.yaml       # Task metadata, phases, rules
+tasks/task_00_fizzbuzz/
+├── task.yaml       # Task metadata, phases, rules, limits
 ├── problem.md      # Agent-visible problem description
 ├── evaluator.py    # Evaluation logic (check_* methods)
-└── tests.py        # Test cases (not agent-visible)
+└── tests.py        # Test cases with expected values (hidden from agent)
 ```
 
 ## Creating New Tasks
 
-1. Create a new directory under `tasks/`
+1. Create a new directory under `tasks/` (convention: `task_XX_name`)
 2. Define `task.yaml` with phases and rules
-3. Write `problem.md` (what the agent sees)
-4. Implement `evaluator.py` with `check_{rule_id}` methods
-5. Create `tests.py` with `TEST_CASES` list
+3. Write `problem.md` (what the agent sees — keep it minimal for harder tasks)
+4. Implement `evaluator.py` with a class `Evaluator(BaseEvaluator)` and `check_{rule_id}` methods
+5. Create `tests.py` with a `TEST_CASES` list of `TestCase` objects
 6. Validate with `saotri-bench validate --task tasks/your_task`
+
+### Design principles
+
+- **Each phase must break the previous solution** — a naive solution passing Phase N should fail on Phase N+1
+- **Violation scopes are hints, not answers** — they tell the agent *what area* failed, not *what the answer is*
+- **Expected values must be consistent across all phases** — the evaluator runs ALL prior-phase tests on the current solution
+- **Easy tasks** include examples in `problem.md`; **harder tasks** give only the function signature
 
 ### Example task.yaml
 
 ```yaml
-id: "task_00_filter_numbers"
-name: "Filter Numbers"
+id: "task_00_fizzbuzz"
+name: "FizzBuzz Extended"
+description: "Implement FizzBuzz with evolving divisor rules"
 difficulty: "easy"
 
 interface:
-  function_name: "filter_numbers"
-  signature: "def filter_numbers(numbers: list[int]) -> list[int]"
+  function_name: "fizzbuzz"
+  signature: "def fizzbuzz(n: int) -> str"
   allowed_imports: []
 
 execution:
@@ -165,35 +261,59 @@ execution:
 
 phases:
   - id: 0
-    description: "Basic filtering"
+    description: "Classic FizzBuzz"
     rules:
       - id: "correct_output"
-        description: "Output matches expected"
-        scopes: ["basic"]
+        description: "Output matches expected string"
+        scopes: ["divisible_by_3", "divisible_by_5", "divisible_by_15", "plain_number"]
 
   - id: 1
-    description: "Handle edge cases"
+    description: "New divisor rule"
     rules:
       - id: "correct_output"
-        description: "Output matches expected"
-        scopes: ["basic", "zeros", "negatives"]
-      - id: "no_mutation"
-        description: "Input must not be modified"
-        scopes: ["direct"]
+        description: "Output matches expected string"
+        scopes: ["divisible_by_3", "divisible_by_5", "divisible_by_15", "plain_number", "divisible_by_7"]
+      - id: "correct_type"
+        description: "Return value must be a string"
+        scopes: ["type_check"]
 
 limits:
   max_attempts_per_phase: 5
   max_total_attempts: 15
 ```
 
+## Sandbox & Security
+
+Solutions run in a sandboxed environment:
+- **Restricted imports** — only explicitly allowed modules can be imported
+- **Restricted builtins** — dangerous functions (`eval`, `exec`, `open`, `__import__`) are blocked or controlled
+- **Timeout enforcement** — code execution is killed after the configured timeout
+- **Input immutability** — evaluators use deep copies to prevent test case corruption
+
 ## Difficulty Tiers
 
 | Tier | Phases | Description |
 |------|--------|-------------|
 | Easy | 3–5 | Basic transformations, simple rules |
-| Medium | 6–15 | Moderate complexity, multiple interacting rules |
+| Medium | 5–15 | Moderate complexity, multiple interacting rules |
 | Hard | 16–30 | Complex algorithms, many edge cases |
 | Expert | 31–50 | Deep challenges, extensive hidden states |
+
+## CLI Reference
+
+```bash
+# List all tasks
+saotri-bench list [--tasks-dir PATH] [--json]
+
+# Validate a task definition
+saotri-bench validate --task PATH
+
+# Run interactively (watch for file changes)
+saotri-bench run --task PATH [--workspace PATH] [--agent-id ID] [--poll-interval SEC]
+
+# Run single evaluation
+saotri-bench run --task PATH --workspace PATH --single
+```
 
 ## The Name: SAOTRI
 
