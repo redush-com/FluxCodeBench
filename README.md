@@ -1,4 +1,4 @@
-# SaotriBench
+# Saotri Bench
 
 <p align="center">
   <img src="assets/saotri-logo.png" alt="SaotriBench" width="400">
