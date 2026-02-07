@@ -20,6 +20,7 @@ class ModelConfig:
 # - Weak:   small model, limited reasoning
 # - Medium: solid open-source model
 # - Strong: top-tier commercial model
+# - Additional frontier models for broader comparison
 MODELS: dict[str, ModelConfig] = {
     "weak": ModelConfig(
         id="google/gemma-2-9b-it",
@@ -30,12 +31,42 @@ MODELS: dict[str, ModelConfig] = {
     "medium": ModelConfig(
         id="meta-llama/llama-3.3-70b-instruct",
         label="Llama 3.3 70B",
-        tier="medium",
+        tier="weak",
         temperature=0.2,
     ),
     "strong": ModelConfig(
         id="anthropic/claude-sonnet-4",
         label="Claude Sonnet",
+        tier="medium",
+        temperature=0.1,
+    ),
+    "claude-opus": ModelConfig(
+        id="anthropic/claude-opus-4.5",
+        label="Claude Opus 4.5",
+        tier="strong",
+        temperature=0.1,
+    ),
+    "gemini-pro": ModelConfig(
+        id="google/gemini-3-pro-preview",
+        label="Gemini 3 Pro",
+        tier="strong",
+        temperature=0.1,
+    ),
+    "grok": ModelConfig(
+        id="x-ai/grok-4",
+        label="Grok 4",
+        tier="strong",
+        temperature=0.1,
+    ),
+    "kimi": ModelConfig(
+        id="moonshotai/kimi-k2.5",
+        label="Kimi K2.5",
+        tier="strong",
+        temperature=0.1,
+    ),
+    "gpt": ModelConfig(
+        id="openai/gpt-5.2",
+        label="GPT-5.2",
         tier="strong",
         temperature=0.1,
     ),
