@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import sys
+import threading
 import time
 from pathlib import Path
 from typing import Any
@@ -347,76 +349,102 @@ class Runner:
         print(f"Workspace: {self.workspace_dir}")
         print(f"Total phases: {len(self.task_config.phases)}")
         print(f"Waiting for solution in: {self.solution_file}")
+        print(f"Type 'q' + Enter or press Ctrl+C to quit")
         print()
 
-        last_mtime = 0.0
+        # Start from current mtime so we don't evaluate the empty initial file
+        last_mtime = self._get_solution_mtime()
 
-        while True:
-            # Check limits
-            if self.total_attempts >= self.task_config.limits.max_total_attempts:
-                print("Max total attempts reached. Task failed.")
-                break
+        # Background thread to listen for 'q' on stdin
+        quit_event = threading.Event()
 
-            if (
-                self.phase_attempts
-                >= self.task_config.limits.max_attempts_per_phase
-            ):
-                print(
-                    f"Max attempts for phase {self.current_phase.id} reached. Task failed."
-                )
-                break
+        def _stdin_listener() -> None:
+            try:
+                for line in sys.stdin:
+                    if line.strip().lower() == "q":
+                        quit_event.set()
+                        return
+            except (EOFError, OSError):
+                pass
 
-            # Wait for solution update
-            current_mtime = self._get_solution_mtime()
-            if current_mtime <= last_mtime:
-                time.sleep(self.poll_interval)
-                continue
+        stdin_thread = threading.Thread(target=_stdin_listener, daemon=True)
+        stdin_thread.start()
 
-            last_mtime = current_mtime
-
-            # Run evaluation
-            print(
-                f"Phase {self.current_phase.id}, "
-                f"Attempt {self.phase_attempts + 1}..."
-            )
-
-            feedback = self.run_single_attempt()
-
-            print(f"  Status: {feedback.status.value}")
-            print(f"  Coverage: {feedback.summary.coverage:.1%}")
-
-            if feedback.violations:
-                print(f"  Violations: {len(feedback.violations)}")
-                for v in feedback.violations:
-                    print(f"    - {v.rule_id} ({v.scope}): {v.count}")
-
-            # Check if phase is complete
-            if feedback.status == Status.VALID:
-                print(f"Phase {self.current_phase.id} completed!")
-                self.metrics.complete_phase(self.current_phase.id)
-
-                # Try to advance to next phase
-                if self._advance_phase():
-                    print(f"Advancing to phase {self.current_phase.id}...")
-
-                    # Run implicit evaluation
-                    implicit_feedback = self.run_implicit_evaluation()
-                    self._write_phase_info(
-                        phase_transition=True,
-                        implicit_feedback=implicit_feedback.to_dict(),
-                    )
-
-                    print(
-                        f"  Implicit evaluation: {implicit_feedback.status.value}"
-                    )
-                    print(
-                        f"  Coverage: {implicit_feedback.summary.coverage:.1%}"
-                    )
-                else:
-                    print("All phases completed! Task successful.")
+        try:
+            while True:
+                # Check for quit from stdin
+                if quit_event.is_set():
+                    print("\nQuit requested. Stopping session.")
                     break
 
-            print()
+                # Check limits
+                if self.total_attempts >= self.task_config.limits.max_total_attempts:
+                    print("Max total attempts reached. Task failed.")
+                    break
+
+                if (
+                    self.phase_attempts
+                    >= self.task_config.limits.max_attempts_per_phase
+                ):
+                    print(
+                        f"Max attempts for phase {self.current_phase.id} reached. Task failed."
+                    )
+                    break
+
+                # Wait for solution update
+                current_mtime = self._get_solution_mtime()
+                if current_mtime <= last_mtime:
+                    time.sleep(self.poll_interval)
+                    continue
+
+                last_mtime = current_mtime
+
+                # Run evaluation
+                print(
+                    f"Phase {self.current_phase.id}, "
+                    f"Attempt {self.phase_attempts + 1}..."
+                )
+
+                feedback = self.run_single_attempt()
+
+                print(f"  Status: {feedback.status.value}")
+                print(f"  Coverage: {feedback.summary.coverage:.1%}")
+
+                if feedback.violations:
+                    print(f"  Violations: {len(feedback.violations)}")
+                    for v in feedback.violations:
+                        print(f"    - {v.rule_id} ({v.scope}): {v.count}")
+
+                # Check if phase is complete
+                if feedback.status == Status.VALID:
+                    print(f"Phase {self.current_phase.id} completed!")
+                    self.metrics.complete_phase(self.current_phase.id)
+
+                    # Try to advance to next phase
+                    if self._advance_phase():
+                        print(f"Advancing to phase {self.current_phase.id}...")
+
+                        # Run implicit evaluation
+                        implicit_feedback = self.run_implicit_evaluation()
+                        self._write_phase_info(
+                            phase_transition=True,
+                            implicit_feedback=implicit_feedback.to_dict(),
+                        )
+
+                        print(
+                            f"  Implicit evaluation: {implicit_feedback.status.value}"
+                        )
+                        print(
+                            f"  Coverage: {implicit_feedback.summary.coverage:.1%}"
+                        )
+                    else:
+                        print("All phases completed! Task successful.")
+                        break
+
+                print()
+
+        except KeyboardInterrupt:
+            print("\n\nSession interrupted (Ctrl+C).")
 
         return self.metrics.generate_report()
 
